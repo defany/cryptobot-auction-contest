@@ -1,0 +1,26 @@
+{
+  "name": "server",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "compose:up": "docker compose up -d",
+    "compose:down": "docker compose down",
+    "dev": "bun --watch src/index.ts",
+    "start": "bun run src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19",
+    "dotenv": "^17.2.3",
+    "fastify": "^5.7.1",
+    "fastify-type-provider-zod": "^6.1.0",
+    "prisma": "6.19",
+    "zod": "^4.3.5"
+  }
+}
