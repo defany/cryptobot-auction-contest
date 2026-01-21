@@ -34,15 +34,18 @@ export async function createBid(
 	this: AuctionService,
 	input: CreateBidIn,
 ): Promise<CreateBidOut> {
+	await CreateBidInSchema.parseAsync(input)
+
 	const out = await this.db.$transaction(async tx => {
 		const auction = await this.auctionProvider
 			.withTx(tx)
 			.fetchById(input.auction_id)
+
 		if (!auction) {
 			throw new Error('Auction not found')
 		}
 
-		if (auction.status !== 'IN_PROGRESS') {
+		if (auction.status === 'FINISHED') {
 			throw new Error('Auction is not in progress')
 		}
 
@@ -66,6 +69,7 @@ export async function createBid(
 		}
 
 		const user = await this.userProvider.withTx(tx).fetchById(input.bidder_id)
+
 		if (!user) {
 			throw new Error('User not found')
 		}
@@ -79,6 +83,18 @@ export async function createBid(
 			bidderId: input.bidder_id,
 			amount: Number(input.amount),
 		})
+
+		if (auction.status === 'SCHEDULED') {
+			const now = new Date()
+
+			const nextRoundExpiresAt = new Date(
+				now.getTime() + auction.roundDurationSec * 1000,
+			)
+
+			await this.auctionProvider
+				.withTx(tx)
+				.startAuction(auction.id, nextRoundExpiresAt)
+		}
 
 		await this.userProvider
 			.withTx(tx)
@@ -102,6 +118,7 @@ export async function createBid(
 				thresholdSec: antiSnipingSettings.thresholdSec,
 				extensionDurationSec: antiSnipingSettings.extensionDurationSec,
 			})
+
 		if (wasExtended) {
 			await this.auctionProvider
 				.withTx(tx)

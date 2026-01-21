@@ -6,11 +6,7 @@ export const CreateAuctionInSchema = z.object({
 	supply: z.number().int().positive(),
 	winners_per_round: z.number().int().positive(),
 	round_duration_sec: z.number().int().positive(),
-	round_expires_at: z.coerce.date().refine(
-		v => v.getTime() > Date.now(),
-		{ message: 'round_expires_at must be in the future' },
-	),
-	anti_sniping: z
+	antisniping_settings: z
 		.object({
 			extensionDurationSec: z.number().int().positive().optional(),
 			thresholdSec: z.number().int().positive().optional(),
@@ -29,12 +25,22 @@ export async function create(
 	this: AuctionService,
 	input: CreateAuctionIn,
 ): Promise<CreateAuctionOut> {
+	await CreateAuctionInSchema.parseAsync(input)
+
+	const hasAuctionInProgress = await this.auctionProvider.hasAuctionInProgress(
+		input.gift_id,
+	)
+	if (hasAuctionInProgress) {
+		throw new Error(
+			'There is another auction in progress, wait until its ended',
+		)
+	}
+
 	const auctionId = await this.auctionProvider.create({
 		giftId: input.gift_id,
 		supply: input.supply,
 		winnersPerRound: input.winners_per_round,
-		roundExpiresAt: input.round_expires_at,
-		antiSniping: input.anti_sniping,
+		antiSniping_settings: input.antisniping_settings,
 		roundDurationSec: input.round_duration_sec,
 	})
 

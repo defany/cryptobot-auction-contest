@@ -4,8 +4,9 @@ import { create } from './create'
 import { fetchAntisnipingSettings } from './fetch_antisniping_settings'
 import { fetchById } from './fetch_by_id'
 import { fetchExpiredAuctions } from './fetch_expired_auctions'
+import { hasAuctionInProgress } from './fetch_non_finished_by_gift'
 import { incrementAntisnipingExtensionIfNeeded } from './increment_antisniping_extenstion'
-import { advanceRound, extendRoundIfNeeded, finishAuction } from './update_auction'
+import { advanceRound, extendRoundIfNeeded, finishAuction, startAuction } from './update_auction'
 
 export class AuctionRepo {
 	protected db: QueryExecutor
@@ -18,6 +19,8 @@ export class AuctionRepo {
 	fetchExpiredAuctions = fetchExpiredAuctions
 	advanceRound = advanceRound
 	finishAuction = finishAuction
+	startAuction = startAuction
+	hasAuctionInProgress = hasAuctionInProgress
 
 	constructor(db: QueryExecutor) {
 		this.db = db

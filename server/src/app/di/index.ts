@@ -2,6 +2,7 @@ import { type FastifyInstance } from 'fastify'
 import { PrismaClient } from '../../../generated/prisma/client'
 import type { AuctionHandler } from '../../controller/handler/auction'
 import type { GiftHandler } from '../../controller/handler/gift'
+import type { UserHandler } from '../../controller/handler/user'
 import type { AuthMiddleware } from '../../controller/middleware/auth'
 import type { AuctionRepo } from '../../repo/auction'
 import type { BidRepo } from '../../repo/bid'
@@ -10,6 +11,7 @@ import type { UserRepo } from '../../repo/user'
 import type { AuctionService } from '../../service/auction'
 import type { GiftService } from '../../service/gift'
 import type { UserService } from '../../service/user'
+import type { ExpiredAuctionRoundsWorker } from '../../worker/process_expired_rounds'
 import {
 	auctionHandler,
 	auctionRepo,
@@ -20,8 +22,7 @@ import { bidRepo } from './bid'
 import { database } from './db'
 import { giftHandler, giftRepo, giftService } from './gift'
 import { httpServer } from './http'
-import { authMiddleware, userRepo, userService } from './user'
-import type { ExpiredAuctionRoundsWorker } from '../../worker/process_expired_rounds'
+import { authMiddleware, userHandler, userRepo, userService } from './user'
 
 type Factory<T> = (this: DI) => T | Promise<T>
 type ShutdownHook = () => void | Promise<void>
@@ -58,6 +59,8 @@ export class DI {
 
 	@Inject(authMiddleware)
 	authMiddleware!: Promise<AuthMiddleware>
+	@Inject(userHandler)
+	userHandler!: Promise<UserHandler>
 	@Inject(userService)
 	userService!: Promise<UserService>
 	@Inject(userRepo)

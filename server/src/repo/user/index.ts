@@ -1,4 +1,3 @@
-import type { PrismaClient } from '../../../generated/prisma/client'
 import type { QueryExecutor } from '../../../types/prisma'
 import { create } from './create'
 import { fetchById } from './fetch_by_id'

@@ -1,4 +1,5 @@
 import type { BidRepo } from '.'
+import { BidStatus } from '../../../generated/prisma/enums'
 
 export async function refundBidsToUsersBalance(
 	this: BidRepo,
@@ -12,6 +13,7 @@ export async function refundBidsToUsersBalance(
 			{
 				$match: {
 					auctionId: { $oid: input.auctionId },
+					status: BidStatus.PENDING,
 					bidderId: { $nin: input.excludeUserIds },
 				},
 			},

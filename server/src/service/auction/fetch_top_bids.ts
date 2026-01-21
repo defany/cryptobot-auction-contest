@@ -24,6 +24,8 @@ export async function fetchTopBids(
 	this: AuctionService,
 	input: FetchTopBidsIn,
 ): Promise<FetchTopBidsOut> {
+	await FetchTopBidsInSchema.parseAsync(input)
+
 	const auction = await this.auctionProvider.fetchById(input.auction_id)
 	if (!auction) {
 		return {

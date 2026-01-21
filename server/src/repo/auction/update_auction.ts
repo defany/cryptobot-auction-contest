@@ -1,5 +1,22 @@
 import type { AuctionRepo } from '.'
 
+export async function startAuction(
+	this: AuctionRepo,
+	auctionId: string,
+	roundExpiresAt: Date,
+): Promise<void> {
+	await this.db.auction.update({
+		where: {
+			id: auctionId,
+			status: 'SCHEDULED',
+		},
+		data: {
+			status: 'IN_PROGRESS',
+			roundExpiresAt: roundExpiresAt,
+		},
+	})
+}
+
 export async function finishAuction(
 	this: AuctionRepo,
 	auctionId: string,
@@ -19,7 +36,7 @@ export async function advanceRound(
 	input: {
 		auctionId: string
 		nextRound: number
-		nextExpiresAt: Date
+		nextExpiresAt: Date | null
 		supplyLeft: number
 	},
 ): Promise<void> {
@@ -32,6 +49,7 @@ export async function advanceRound(
 			round: input.nextRound,
 			roundExpiresAt: input.nextExpiresAt,
 			supply: input.supplyLeft,
+			status: input.nextExpiresAt === null ? 'SCHEDULED' : 'IN_PROGRESS'
 		},
 	})
 
@@ -39,7 +57,8 @@ export async function advanceRound(
 		throw new Error('failed to advance auction round')
 	}
 
-	await this.db.auctionAntiSniping.update({
+	// если настроек нет - просто в молоко запрос улетит и ошибки не увидим никакой
+	await this.db.auctionAntiSniping.updateMany({
 		where: {
 			auctionId: input.auctionId,
 		},
@@ -53,11 +72,15 @@ export async function extendRoundIfNeeded(
 	this: AuctionRepo,
 	input: {
 		auctionId: string
-		currentExpiresAt: Date
+		currentExpiresAt: Date | null
 		thresholdSec: number
 		extensionDurationSec: number
 	},
 ): Promise<boolean> {
+	if (!input.currentExpiresAt) {
+		return false
+	}
+
 	const now = new Date()
 
 	const leftMs = input.currentExpiresAt.getTime() - now.getTime()
@@ -72,9 +95,7 @@ export async function extendRoundIfNeeded(
 	}
 
 	const extensionMs = input.extensionDurationSec * 1000
-	const nextExpiresAt = new Date(
-		input.currentExpiresAt.getTime() + extensionMs,
-	)
+	const nextExpiresAt = new Date(input.currentExpiresAt.getTime() + extensionMs)
 
 	const res = await this.db.auction.updateMany({
 		where: {

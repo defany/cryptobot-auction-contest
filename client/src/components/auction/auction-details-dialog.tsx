@@ -1,3 +1,4 @@
+import { UserAvatar } from '@/components/common/user-avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -7,7 +8,6 @@ import {
 	DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { UserAvatar } from '@/components/common/user-avatar'
 import { useCountdown } from '@/hooks/use-countdown'
 import { callApi } from '@/lib/api/call-api'
 import { useEffect, useMemo, useState } from 'react'
@@ -19,7 +19,7 @@ type AuctionDto = {
 	roundExpiresAt: string
 	supply: number
 	winnersPerRound: number
-	status: 'IN_PROGRESS' | 'FINISHED' | string
+	status: 'IN_PROGRESS' | 'SCHEDULED' | 'FINISHED' | string
 	createdAt: string
 }
 
@@ -51,7 +51,9 @@ type Props = {
 
 function formatCompactNumber(n: number) {
 	try {
-		return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n)
+		return new Intl.NumberFormat(undefined, {
+			maximumFractionDigits: 0,
+		}).format(n)
 	} catch {
 		return String(n)
 	}
@@ -84,7 +86,9 @@ function RankBadge({ rank }: { rank: number }) {
 		<div
 			className={[
 				'flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold',
-				isTop ? 'bg-yellow-400/90 text-black' : 'bg-muted text-muted-foreground',
+				isTop
+					? 'bg-yellow-400/90 text-black'
+					: 'bg-muted text-muted-foreground',
 			].join(' ')}
 		>
 			{rank}
@@ -113,7 +117,10 @@ export function AuctionDetailsDialog({ open, auctionId, onOpenChange }: Props) {
 			setLoading(true)
 			try {
 				const [a, t] = await Promise.all([
-					callApi<{ response: AuctionResponse }>('GET', `/auctions/${auctionId}`),
+					callApi<{ response: AuctionResponse }>(
+						'GET',
+						`/auctions/${auctionId}`,
+					),
 					callApi<{ response: TopBidsResponse }>(
 						'GET',
 						`/auctions/${auctionId}/bids/top`,
@@ -145,11 +152,25 @@ export function AuctionDetailsDialog({ open, auctionId, onOpenChange }: Props) {
 	const userBid = topRes?.user_bid ?? null
 	const userPlace = topRes?.user_place ?? null
 
-	const top1Amount = topBids[0]?.amount ?? 0
+	const top1Bid = topBids[0] ?? null
 
-	const sliderMax = useMemo(() => Math.max(0, top1Amount * 2), [top1Amount])
+	const isUserLeading = useMemo(() => {
+		if (topBids.length === 0) return false
+		if (!userBid) return false
+		if (!top1Bid) return false
+		if (top1Bid.id === userBid.id) return true
+		if (top1Bid.bidderId === userBid.bidderId && top1Bid.amount === userBid.amount)
+			return true
+		return false
+	}, [topBids.length, userBid, top1Bid])
 
+	const top1Amount = top1Bid?.amount ?? 0
 	const minimalToWinAmount = minimalBidToBeat?.amount ?? 0
+
+	const sliderMax = useMemo(() => {
+		const base = Math.max(top1Amount * 2, minimalToWinAmount * 2)
+		return Math.max(1000, base)
+	}, [top1Amount, minimalToWinAmount])
 
 	const resultingBidAmount = useMemo(() => {
 		const base = userBid?.amount ?? 0
@@ -168,21 +189,30 @@ export function AuctionDetailsDialog({ open, auctionId, onOpenChange }: Props) {
 	}, [minimalDelta])
 
 	const untilNextRoundText = useMemo(() => {
+		if (!auction) return '—'
+		if (auction.status === 'SCHEDULED') return 'Waiting for bids…'
 		if (countdown.leftSec == null) return '—'
 		return formatCountdown(countdown.leftSec)
-	}, [countdown.leftSec])
+	}, [auction, countdown.leftSec])
 
 	const statusBadge = useMemo(() => {
 		if (!auction) return null
 		if (auction.status === 'IN_PROGRESS') {
 			return (
-				<Badge className="bg-green-500/15 text-green-400 border border-green-500/20 rounded-full">
+				<Badge className='bg-green-500/15 text-green-400 border border-green-500/20 rounded-full'>
 					IN PROGRESS
 				</Badge>
 			)
 		}
+		if (auction.status === 'SCHEDULED') {
+			return (
+				<Badge className='bg-yellow-500/15 text-yellow-400 border border-yellow-500/20 rounded-full'>
+					SCHEDULED
+				</Badge>
+			)
+		}
 		return (
-			<Badge variant="secondary" className="rounded-full">
+			<Badge variant='secondary' className='rounded-full'>
 				{auction.status}
 			</Badge>
 		)
@@ -197,11 +227,12 @@ export function AuctionDetailsDialog({ open, auctionId, onOpenChange }: Props) {
 	}, [open])
 
 	const thresholdPct = useMemo(() => {
+		if (!minimalBidToBeat) return null
 		if (sliderMax <= 0) return null
 		const base = userBid?.amount ?? 0
 		const need = Math.max(0, minimalToWinAmount - base)
 		return clamp((need / sliderMax) * 100, 0, 100)
-	}, [sliderMax, userBid, minimalToWinAmount])
+	}, [sliderMax, userBid, minimalToWinAmount, minimalBidToBeat])
 
 	const isAboveMinimal = useMemo(() => {
 		if (!minimalBidToBeat) return true
@@ -247,6 +278,7 @@ export function AuctionDetailsDialog({ open, auctionId, onOpenChange }: Props) {
 
 	async function submitBid(): Promise<void> {
 		if (!auctionId) return
+		if (isUserLeading) return
 		if (bidValue <= 0) return
 		if (!isAboveMinimal) return
 
@@ -265,154 +297,185 @@ export function AuctionDetailsDialog({ open, auctionId, onOpenChange }: Props) {
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-lg">
+			<DialogContent className='max-w-lg'>
 				<DialogHeader>
 					<DialogTitle>Place a Bid</DialogTitle>
 				</DialogHeader>
 
 				{loading ? (
-					<div className="text-sm text-muted-foreground">Loading…</div>
+					<div className='text-sm text-muted-foreground'>Loading…</div>
 				) : !auction ? (
-					<div className="text-sm text-muted-foreground">Auction not found</div>
+					<div className='text-sm text-muted-foreground'>Auction not found</div>
 				) : (
-					<div className="space-y-4">
-						<div className="rounded-xl bg-muted/40 p-4">
-							<div className="flex items-center justify-between gap-3">
-								<div className="text-sm text-muted-foreground">Minimum bid</div>
-								<div className="text-xl font-semibold">{minimalDeltaText}</div>
+					<div className='space-y-4'>
+						<div className='rounded-xl bg-muted/40 p-4'>
+							<div className='flex items-center justify-between gap-3'>
+								<div className='text-sm text-muted-foreground'>Minimum bid</div>
+								<div className='text-xl font-semibold'>{minimalDeltaText}</div>
 							</div>
 						</div>
 
-						<div className="space-y-3 rounded-xl bg-muted/25 p-4">
-							<div className="flex items-center justify-between">
-								<div className="text-sm font-medium">⭐ {formatCompactNumber(bidValue)}</div>
-								<div className="text-sm text-muted-foreground">
+						<div className='space-y-3 rounded-xl bg-muted/25 p-4'>
+							<div className='flex items-center justify-between'>
+								<div className='text-sm font-medium'>
+									⭐ {formatCompactNumber(bidValue)}
+								</div>
+								<div className='text-sm text-muted-foreground'>
 									Your total:{' '}
-									<span className="text-foreground font-medium">
+									<span className='text-foreground font-medium'>
 										⭐ {formatCompactNumber(resultingBidAmount)}
 									</span>
 								</div>
 							</div>
 
-							<div className="relative">
+							<div className='relative'>
 								{thresholdPct != null ? (
 									<div
-										className="pointer-events-none absolute -top-1 bottom-[-4px] w-[2px] rounded-full bg-yellow-400/70"
+										className='pointer-events-none absolute -top-1 bottom-[-4px] w-[2px] rounded-full bg-yellow-400/70'
 										style={{ left: `${thresholdPct}%` }}
 									/>
 								) : null}
 
 								<input
-									type="range"
+									type='range'
 									min={0}
 									max={sliderMax}
 									step={1}
 									value={bidValue}
 									onChange={e => setBidValue(Number(e.target.value) || 0)}
-									className="w-full accent-yellow-400"
+									className='w-full accent-yellow-400'
+									disabled={isUserLeading}
 								/>
 							</div>
 
-							<div className="flex items-center justify-between text-xs text-muted-foreground">
+							<div className='flex items-center justify-between text-xs text-muted-foreground'>
 								<span>0</span>
 								<span>max ⭐ {formatCompactNumber(sliderMax)}</span>
 							</div>
 
-							<div className="flex items-center gap-2">
-								<div className="w-32">
+							<div className='flex items-center gap-2'>
+								<div className='w-32'>
 									<Input
-										inputMode="numeric"
+										inputMode='numeric'
 										value={String(bidValue)}
 										onChange={e => {
-											const n = Number(e.target.value)
-											if (!Number.isFinite(n)) {
+											const raw = e.target.value.trim()
+											if (raw === '') {
 												setBidValue(0)
 												return
 											}
+											const n = Number(raw)
+											if (!Number.isFinite(n) || n < 0) return
 											setBidValue(clamp(Math.floor(n), 0, sliderMax))
 										}}
+										disabled={isUserLeading}
 									/>
 								</div>
 
-								<div className="text-sm">
-									{isAboveMinimal ? (
-										<span className="text-green-400">✅ beats minimum</span>
+								<div className='text-sm'>
+									{isUserLeading ? (
+										<span className='text-muted-foreground'>You are #1</span>
+									) : isAboveMinimal ? (
+										<span className='text-green-400'>✅ beats minimum</span>
 									) : (
-										<span className="text-yellow-400">
-											needs ⭐ {formatCompactNumber(Math.max(0, minimalToWinAmount - resultingBidAmount))}
+										<span className='text-yellow-400'>
+											needs ⭐{' '}
+											{formatCompactNumber(
+												Math.max(0, minimalToWinAmount - resultingBidAmount),
+											)}
 										</span>
 									)}
 								</div>
 							</div>
 						</div>
 
-						<div className="grid grid-cols-3 gap-2">
-							<div className="rounded-xl bg-muted/40 p-3 text-center">
-								<div className="text-lg font-semibold">{minimalDeltaText}</div>
-								<div className="text-xs text-muted-foreground">minimum bid</div>
+						<div className='grid grid-cols-3 gap-2'>
+							<div className='rounded-xl bg-muted/40 p-3 text-center'>
+								<div className='text-lg font-semibold'>{minimalDeltaText}</div>
+								<div className='text-xs text-muted-foreground'>minimum bid</div>
 							</div>
 
-							<div className="rounded-xl bg-muted/40 p-3 text-center">
-								<div className="text-lg font-semibold">{untilNextRoundText}</div>
-								<div className="text-xs text-muted-foreground">until next round</div>
+							<div className='rounded-xl bg-muted/40 p-3 text-center'>
+								<div className='text-lg font-semibold whitespace-nowrap'>
+									{untilNextRoundText}
+								</div>
+								<div className='text-xs text-muted-foreground'>
+									{auction.status === 'SCHEDULED'
+										? 'waiting to start'
+										: 'until next round'}
+								</div>
 							</div>
 
-							<div className="rounded-xl bg-muted/40 p-3 text-center">
-								<div className="text-lg font-semibold">{formatCompactNumber(supplyLeft)}</div>
-								<div className="text-xs text-muted-foreground">left</div>
+							<div className='rounded-xl bg-muted/40 p-3 text-center'>
+								<div className='text-lg font-semibold'>
+									{formatCompactNumber(supplyLeft)}
+								</div>
+								<div className='text-xs text-muted-foreground'>left</div>
 							</div>
 						</div>
 
-						<div className="space-y-2">
-							<div className="text-xs font-medium text-muted-foreground">YOUR BID WILL BE</div>
+						<div className='space-y-2'>
+							<div className='text-xs font-medium text-muted-foreground'>
+								YOUR BID WILL BE
+							</div>
 
-							<div className="rounded-xl bg-muted/20 p-3">
-								<div className="flex items-center justify-between">
-									<div className="flex items-center gap-3">
+							<div className='rounded-xl bg-muted/20 p-3'>
+								<div className='flex items-center justify-between'>
+									<div className='flex items-center gap-3'>
 										<UserAvatar id={userBid?.bidderId ?? 0} />
-										<div className="leading-tight">
-											<div className="text-sm font-medium">User {userBid?.bidderId ?? '—'}</div>
-											<div className="text-xs text-muted-foreground">
+										<div className='leading-tight'>
+											<div className='text-sm font-medium'>
+												User {userBid?.bidderId ?? '—'}
+											</div>
+											<div className='text-xs text-muted-foreground'>
 												{userPlace ? `Place #${userPlace}` : 'No place yet'}
 											</div>
 										</div>
 									</div>
 
-									<div className="text-sm font-semibold">⭐ {formatCompactNumber(resultingBidAmount)}</div>
+									<div className='text-sm font-semibold'>
+										⭐ {formatCompactNumber(resultingBidAmount)}
+									</div>
 								</div>
 							</div>
 						</div>
 
-						<div className="space-y-2">
-							<div className="flex items-center justify-between">
-								<div className="text-xs font-medium text-muted-foreground">
+						<div className='space-y-2'>
+							<div className='flex items-center justify-between'>
+								<div className='text-xs font-medium text-muted-foreground'>
 									TOP {winnersPerRound} WINNERS
 								</div>
 
-								<div className="flex items-center gap-2">
-									<Badge variant="secondary" className="rounded-full">
+								<div className='flex items-center gap-2'>
+									<Badge variant='secondary' className='rounded-full'>
 										Round {auction.round}
 									</Badge>
 									{statusBadge}
 								</div>
 							</div>
 
-							<div className="space-y-2">
+							<div className='space-y-2'>
 								{topBids.length === 0 ? (
-									<div className="text-sm text-muted-foreground">No bids yet</div>
+									<div className='text-sm text-muted-foreground'>
+										No bids yet
+									</div>
 								) : (
 									topBids.map((b, idx) => (
 										<div
 											key={b.id}
-											className="flex items-center justify-between rounded-xl bg-muted/20 p-3"
+											className='flex items-center justify-between rounded-xl bg-muted/20 p-3'
 										>
-											<div className="flex items-center gap-3">
+											<div className='flex items-center gap-3'>
 												<RankBadge rank={idx + 1} />
 												<UserAvatar id={b.bidderId} />
-												<div className="text-sm font-medium">User {b.bidderId}</div>
+												<div className='text-sm font-medium'>
+													User {b.bidderId}
+												</div>
 											</div>
 
-											<div className="text-sm font-semibold">⭐ {formatCompactNumber(b.amount)}</div>
+											<div className='text-sm font-semibold'>
+												⭐ {formatCompactNumber(b.amount)}
+											</div>
 										</div>
 									))
 								)}
@@ -420,11 +483,20 @@ export function AuctionDetailsDialog({ open, auctionId, onOpenChange }: Props) {
 						</div>
 
 						<Button
-							className="w-full"
-							disabled={!isAboveMinimal || bidValue <= 0 || isSubmittingBid}
+							className='w-full'
+							disabled={
+								isUserLeading ||
+								bidValue <= 0 ||
+								!isAboveMinimal ||
+								isSubmittingBid
+							}
 							onClick={submitBid}
 						>
-							{isSubmittingBid ? 'Submitting…' : 'Place a Bid'}
+							{isUserLeading
+								? 'You’re leading'
+								: isSubmittingBid
+								? 'Submitting…'
+								: 'Place a Bid'}
 						</Button>
 					</div>
 				)}

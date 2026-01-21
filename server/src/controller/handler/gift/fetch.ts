@@ -1,9 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import type { GiftHandler } from '.'
-import type { Gift } from '../../../../generated/prisma/client'
+import type { FetchAllOut } from '../../../repo/gift/fetch'
 
 type FetchGiftsOut = {
-	gifts: Gift[]
+	gifts: FetchAllOut[]
 }
 
 export async function fetchGifts(

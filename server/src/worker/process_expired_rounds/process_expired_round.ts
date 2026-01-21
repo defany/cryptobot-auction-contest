@@ -12,8 +12,8 @@ export async function processExpiredRound(
 			.withTx(tx)
 			.fetchTopBids(auction.id, auction.winnersPerRound)
 
-		const winnersThisRound = winnerBids.length
-		const supplyLeft = Math.max(0, auction.supply - winnersThisRound)
+		const winnersCountThisRound = winnerBids.length
+		const supplyLeft = Math.max(0, auction.supply - winnersCountThisRound)
 
 		// TODO: extend round if there are no winners
 		if (winnerBids.length === 0) {
@@ -23,10 +23,21 @@ export async function processExpiredRound(
 		if (supplyLeft === 0) {
 			await this.finishAuction(auction, winnerBids, tx)
 		} else {
+			let pendingBidsCount = await this.bidRepo.fetchCountByStatus(
+				auction.id,
+				'PENDING',
+			)
+
+			// не учитываем тех, кто победил
+			pendingBidsCount = pendingBidsCount - winnersCountThisRound
+
 			await this.auctionRepo.withTx(tx).advanceRound({
 				auctionId: auction.id,
 				nextRound: auction.round + 1,
-				nextExpiresAt: new Date(Date.now() + auction.roundDurationSec * 1000),
+				nextExpiresAt:
+					pendingBidsCount > 0
+						? new Date(Date.now() + auction.roundDurationSec * 1000)
+						: null,
 				supplyLeft: supplyLeft,
 			})
 		}
@@ -34,10 +45,10 @@ export async function processExpiredRound(
 		// мы к старому номеру прибавляем кол-во текущих победителей
 		const gift = await this.giftRepo
 			.withTx(tx)
-			.incrementLastIssuedNumber(auction.giftId, winnersThisRound)
+			.incrementLastIssuedNumber(auction.giftId, winnersCountThisRound)
 
 		// после прибавления получаем начальный номер (пример: было 0, стало 100, стартовое число = (было)100 - (стало)100 + 1 = 1)
-		const startNumber = gift.lastIssuedNumber - winnersThisRound + 1
+		const startNumber = gift.lastIssuedNumber - winnersCountThisRound + 1
 
 		const bidIds: string[] = []
 
@@ -54,8 +65,7 @@ export async function processExpiredRound(
 		}
 
 		await this.giftRepo.withTx(tx).addUserGifts(userGifts)
-
-		await this.bidRepo.withTx(tx).closeBids(bidIds)
+		await this.bidRepo.withTx(tx).closeBids(auction.id, bidIds)
 	})
 }
 
@@ -73,4 +83,6 @@ export async function finishAuction(
 	})
 
 	await this.auctionRepo.withTx(tx).finishAuction(auction.id)
+
+	await this.bidRepo.withTx(tx).closeBids(auction.id)
 }

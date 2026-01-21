@@ -1,37 +1,57 @@
 import type { BidRepo } from '.'
-import type { BidStatus } from '../../../generated/prisma/enums'
 
 export type CreateBidIn = {
 	bidderId: number
 	auctionId: string
 	amount: number
-	status?: BidStatus
-	createdAt?: Date
 }
 
 export async function createBid(
 	this: BidRepo,
 	input: CreateBidIn,
 ): Promise<string> {
-	const bid = await this.db.bid.upsert({
-		create: {
-			bidderId: input.bidderId,
-			auctionId: input.auctionId,
-			amount: input.amount,
-			status: input.status,
-			createdAt: input.createdAt,
-		},
-		update: {
-			amount: {
-				increment: input.amount
-			},
-		},
+	/* 
+		Не смог подружить findAndModify + prisma, поэтому пришлось в два запроса для upsert'а
+
+		Встроенный в призму механизм не подходит из-за того, что наш индекс не уникален (сколько угодно CLOSED ставок на аук, но только одна PENDING)
+	*/
+	const existing = await this.db.bid.findFirst({
 		where: {
-			auctionId_bidderId_status: {
-				bidderId: input.bidderId,
-				auctionId: input.auctionId,
-				status: 'PENDING',
+			auctionId: input.auctionId,
+			bidderId: input.bidderId,
+			status: 'PENDING',
+		},
+		select: {
+			id: true,
+		},
+	})
+	if (existing) {
+		const bid = await this.db.bid.update({
+			where: {
+				id: existing.id,
 			},
+			data: {
+				amount: {
+					increment: input.amount,
+				},
+			},
+			select: {
+				id: true,
+			},
+		})
+
+		return bid.id
+	}
+
+	const bid = await this.db.bid.create({
+		data: {
+			auctionId: input.auctionId,
+			bidderId: input.bidderId,
+			amount: input.amount,
+			status: 'PENDING',
+		},
+		select: {
+			id: true,
 		},
 	})
 

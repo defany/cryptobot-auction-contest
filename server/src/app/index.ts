@@ -27,6 +27,9 @@ export class App {
 
 		const auctionHandler = await this.di.auctionHandler
 		auctionHandler.setup()
+
+		const userHandler = await this.di.userHandler
+		userHandler.setup()
 	}
 
 	private async setupMiddlewares(): Promise<void> {

@@ -41,6 +41,7 @@ model UserGift {
 }
 
 enum AuctionStatus {
+  SCHEDULED 
   IN_PROGRESS
   FINISHED
 }
@@ -49,7 +50,7 @@ model Auction {
   id               String        @id @default(auto()) @map("_id") @db.ObjectId
   giftId           String        @db.ObjectId
   round            Int           @default(1)
-  roundExpiresAt   DateTime
+  roundExpiresAt   DateTime?
   roundDurationSec Int           @default(60)
   supply           Int
   winnersPerRound  Int
@@ -81,12 +82,12 @@ enum BidStatus {
 model Bid {
   id        String    @id @default(auto()) @map("_id") @db.ObjectId
   auctionId String    @db.ObjectId
-  bidderId  Int
+  bidderId  Int       @db.Long
   amount    Float     @db.Double
   status    BidStatus @default(PENDING)
   createdAt DateTime  @default(now())
 
   auction Auction @relation(fields: [auctionId], references: [id])
 
-  @@unique([auctionId, bidderId, status])
+  @@index([auctionId, bidderId])
 }

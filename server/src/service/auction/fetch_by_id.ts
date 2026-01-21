@@ -11,7 +11,9 @@ export const FetchAuctionByIdInParamsSchema = FetchAuctionByIdInSchema.pick({
 	auction_id: true,
 })
 
-export type FetchAuctionByIdInParams = z.infer<typeof FetchAuctionByIdInParamsSchema>
+export type FetchAuctionByIdInParams = z.infer<
+	typeof FetchAuctionByIdInParamsSchema
+>
 export type FetchAuctionByIdIn = z.infer<typeof FetchAuctionByIdInSchema>
 
 export type FetchAuctionByIdOut = {
@@ -23,6 +25,8 @@ export async function fetchById(
 	this: AuctionService,
 	input: FetchAuctionByIdIn,
 ): Promise<FetchAuctionByIdOut> {
+	await FetchAuctionByIdInSchema.parseAsync(input)
+
 	const auction = await this.auctionProvider.fetchById(input.auction_id)
 	if (!auction) {
 		return {

@@ -1,5 +1,6 @@
 import type { GiftRepo } from '../../repo/gift'
 import { fetch } from './fetch'
+import { fetchUserGifts } from './fetch_user_gifts'
 
 
 export class GiftService {
@@ -9,6 +10,7 @@ export class GiftService {
 	protected giftRepo: GiftRepo 
 
 	fetch = fetch
+	fetchUserGifts = fetchUserGifts
 
 	constructor(giftRepo: GiftRepo) {
 		this.giftRepo = giftRepo
