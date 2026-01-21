@@ -57,7 +57,7 @@ export async function extendRoundIfNeeded(
 		thresholdSec: number
 		extensionDurationSec: number
 	},
-): Promise<void> {
+): Promise<boolean> {
 	const now = new Date()
 
 	const leftMs = input.currentExpiresAt.getTime() - now.getTime()
@@ -68,11 +68,13 @@ export async function extendRoundIfNeeded(
 	}
 
 	if (leftMs > thresholdMs) {
-		return
+		return false
 	}
 
 	const extensionMs = input.extensionDurationSec * 1000
-	const nextExpiresAt = new Date(input.currentExpiresAt.getTime() + extensionMs)
+	const nextExpiresAt = new Date(
+		input.currentExpiresAt.getTime() + extensionMs,
+	)
 
 	const res = await this.db.auction.updateMany({
 		where: {
@@ -87,4 +89,6 @@ export async function extendRoundIfNeeded(
 	if (res.count !== 1) {
 		throw new Error('failed to extend round duration')
 	}
+
+	return true
 }

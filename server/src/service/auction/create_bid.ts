@@ -94,19 +94,22 @@ export async function createBid(
 			}
 		}
 
-		await this.auctionProvider
+		const wasExtended = await this.auctionProvider
 			.withTx(tx)
-			.incrementAntisnipingExtensionIfNeeded({
+			.extendRoundIfNeeded({
 				auctionId: input.auction_id,
-				maxExtensions: antiSnipingSettings.maxExtensions,
+				currentExpiresAt: auction.roundExpiresAt,
+				thresholdSec: antiSnipingSettings.thresholdSec,
+				extensionDurationSec: antiSnipingSettings.extensionDurationSec,
 			})
-
-		await this.auctionProvider.withTx(tx).extendRoundIfNeeded({
-			auctionId: input.auction_id,
-			currentExpiresAt: auction.roundExpiresAt,
-			thresholdSec: antiSnipingSettings.thresholdSec,
-			extensionDurationSec: antiSnipingSettings.extensionDurationSec,
-		})
+		if (wasExtended) {
+			await this.auctionProvider
+				.withTx(tx)
+				.incrementAntisnipingExtensionIfNeeded({
+					auctionId: input.auction_id,
+					maxExtensions: antiSnipingSettings.maxExtensions,
+				})
+		}
 
 		return {
 			bidId: bidId,

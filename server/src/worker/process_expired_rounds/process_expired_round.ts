@@ -15,7 +15,10 @@ export async function processExpiredRound(
 		const winnersThisRound = winnerBids.length
 		const supplyLeft = Math.max(0, auction.supply - winnersThisRound)
 
-		// TODO: extend round if no winners were chosen 
+		// TODO: extend round if there are no winners
+		if (winnerBids.length === 0) {
+			return
+		}
 
 		if (supplyLeft === 0) {
 			await this.finishAuction(auction, winnerBids, tx)

@@ -1,3 +1,4 @@
+import cors from "@fastify/cors"
 import { config } from '../config'
 import { DI } from './di'
 
@@ -10,6 +11,10 @@ export class App {
 		await this.setupMiddlewares()
 		await this.setupRoutes()
 		await this.startWorkers()
+
+		await httpServer.register(cors, {
+			origin: "*",
+		})
 
 		await httpServer.listen({
 			port: config.http_port,
