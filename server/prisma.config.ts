@@ -7,7 +7,7 @@ const host = env('MONGO_HOST')
 const port = env('MONGO_PORT')
 const db   = env('MONGO_DB')
 
-const databaseUrl = `mongodb://${user}:${pass}@${host}:${port}/${db}?authSource=admin`
+const databaseUrl = `mongodb://${user}:${pass}@${host}:${port}/${db}?authSource=admin&replicaSet=rs0`
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',

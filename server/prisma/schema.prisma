@@ -7,7 +7,7 @@ datasource db {
   provider = "mongodb"
   // not needed in prisma v7, but mongo is still on v6, while vs code plugin already expects v7
   // so to start u need to uncomment this and run npx prisma db push, then comment it back if u don't want to see the error 
-  // url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 model User {

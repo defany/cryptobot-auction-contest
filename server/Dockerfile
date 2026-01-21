@@ -12,7 +12,6 @@ RUN bun install --frozen-lockfile
 COPY . .
 
 RUN bunx prisma generate
-RUN bun run build
 
 
 FROM oven/bun:1.1.34
@@ -23,13 +22,14 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-ENV NODE_ENV=production
+ENV ENV=production
 
 COPY --from=build /app/package.json /app/bun.lockb* ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/prisma ./prisma
-COPY --from=build /app/dist ./dist
+COPY --from=build /app/src ./src
+COPY --from=build /app/generated ./generated
 
 EXPOSE 3000
 
-CMD ["sh", "-lc", "bunx prisma db push && bun run start"]
+CMD ["bun", "start"]
