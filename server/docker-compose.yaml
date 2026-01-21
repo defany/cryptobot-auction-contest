@@ -85,7 +85,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-mongodb://${MONGO_USER:-defany}:${MONGO_PASSWORD:-2335}@mongodb:27017/${MONGO_DB:-app}?authSource=admin&replicaSet=rs0}
       PORT: ${BACKEND_PORT:-3000}
     ports:
-      - "${BACKEND_PORT:-3000}:3000"
+      - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
     depends_on:
       mongodb:
         condition: service_healthy
