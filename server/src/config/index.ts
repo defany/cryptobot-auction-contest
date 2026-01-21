@@ -6,8 +6,11 @@ const lowercasedEnv = Object.fromEntries(
 )
 
 const EnvSchema = z.object({
+	http_host: z.string().default('localhost'),
 	http_port: z.coerce.number().int().min(1).default(3000),
-	node_env: z.enum(['development', 'test', 'production']).default('development'),
+	node_env: z
+		.enum(['development', 'test', 'production'])
+		.default('development'),
 
 	database_url: z.string().min(1),
 

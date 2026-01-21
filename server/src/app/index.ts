@@ -1,4 +1,4 @@
-import cors from "@fastify/cors"
+import cors from '@fastify/cors'
 import { config } from '../config'
 import { DI } from './di'
 
@@ -13,11 +13,11 @@ export class App {
 		await this.startWorkers()
 
 		await httpServer.register(cors, {
-			origin: "*",
+			origin: '*',
 		})
 
 		await httpServer.listen({
-			host: '0.0.0.0',
+			host: config.http_host,
 			port: config.http_port,
 		})
 	}
