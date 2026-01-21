@@ -12,8 +12,6 @@ export function useCountdown(expiresAtIso: string | null) {
 	useEffect(() => {
 		if (!expiresAtMs) return
 
-		setNowMs(Date.now())
-
 		const id = setInterval(() => {
 			setNowMs(Date.now())
 		}, 1000)
@@ -21,17 +19,13 @@ export function useCountdown(expiresAtIso: string | null) {
 		return () => clearInterval(id)
 	}, [expiresAtMs])
 
-	const leftMs = expiresAtMs ? expiresAtMs - nowMs : null
-
-	const leftSec = leftMs === null ? null : Math.max(0, Math.floor(leftMs / 1000))
-	const mm =
-		leftSec === null ? null : String(Math.floor(leftSec / 60)).padStart(2, '0')
-	const ss = leftSec === null ? null : String(leftSec % 60).padStart(2, '0')
+	const leftMs = expiresAtMs != null ? expiresAtMs - nowMs : null
+	const leftSec =
+		leftMs == null ? null : Math.max(0, Math.floor(leftMs / 1000))
 
 	return {
 		leftMs,
 		leftSec,
-		formatted: leftSec === null ? null : `${mm}:${ss}`,
-		isExpired: leftSec !== null && leftSec === 0,
+		isExpired: leftSec === 0,
 	}
 }
