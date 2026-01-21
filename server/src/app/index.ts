@@ -16,8 +16,6 @@ export class App {
 			origin: "*",
 		})
 
-		console.info(config.database_url, config.mongo_host)
-
 		await httpServer.listen({
 			host: '0.0.0.0',
 			port: config.http_port,
