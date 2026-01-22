@@ -5,8 +5,13 @@ generator client {
 
 datasource db {
   provider = "mongodb"
-  // not needed in prisma v7, but mongo is still on v6, while vs code plugin already expects v7
-  // so to start u need to uncomment this and run npx prisma db push, then comment it back if u don't want to see the error 
+  /* 
+    Данный параметр не нужен в Prisma v7, но MongoDB пока что поддерживается только на v6
+
+    К несчастью, CLI ругаются если этого поля нет, а плагин в VS Code ругается если есть, поэтому
+
+    Для разработки можно его закомментировать, а для bunx prisma db push - раскомментировать
+  */
   url      = env("DATABASE_URL")
 }
 
@@ -15,9 +20,12 @@ model User {
   id        String     @id @default(auto()) @map("_id") @db.ObjectId
   // telegram user id 
   userId    Int        @unique @db.Long
-  // a better approach would be a separate collection for balances
-  // to support multiple balance types and currencies in the future,
-  // but for simplicity we keep a single balance field
+  /* 
+    Более хорошим решением было бы вынести балансы в отдельную коллекцию и добавить код валюты,
+    так как в будущем можем захотеть и аукционы делать на разную валюту (например, тон или звезды), и просто балансы юзеров расширить
+
+    Также, Prisma не поддерживает Decimal тип данных на уровне схемы, поэтому юзаем примитивы
+  */
   balance   Float      @default(0) @db.Double
   userGifts UserGift[]
 }

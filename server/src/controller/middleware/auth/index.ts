@@ -13,12 +13,13 @@ export class AuthMiddleware {
 
 	setup() {
 		/* 
-			For simplicity we are omitting real authentication
-			In real world telegram sign authorization should be verified here
-			We expect Authorization header in format: "Bearer <user-id>" 
+			Для простоты мы упускаем реальную аутентификацию 
+			В реальном же мире мы бы проверяли какую-нибудь подпись от тг
 
-			If user does not exist in database we will register him
-			If user provides header: X-Balance-Restore we will restore his balance to initial value (10000)
+			Мы ожидаем заголовок авторизации в формате: Bearer <айди пользователя>
+
+			Если юзера нет в базе данных, мы его зарегистрируем
+			Если юзер прокинет заголовок x-balance-restore - мы восстановим ему баланс
 		*/
 
 		this.server.addHook(
