@@ -1,7 +1,7 @@
 import http from 'k6/http'
 import { check, group, sleep, fail } from 'k6'
 
-const BASE_URL = 'https://defany.iky.su'
+const BASE_URL = 'http://161.35.206.199:3000'
 const GIFT_ID = '69716cc5705f5357b48ce5b0'
 
 const USERS_COUNT = 300

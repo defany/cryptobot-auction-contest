@@ -44,5 +44,3 @@ export class ErrorMiddleware {
 		)
 	}
 }
-
-const isDomainError = (err: unknown): err is BaseError => err instanceof Error && 'statusCode' in err && 'code' in err 

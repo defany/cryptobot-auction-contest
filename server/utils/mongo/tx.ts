@@ -50,6 +50,7 @@ function defaultIsRetryable(err: unknown): boolean {
 	const message = String(e?.message ?? '')
 	const meta = e?.meta
 
+	if (code === 'P2034') return true
 	if (code === 'P2028') return true
 
 	if (code === '40001') return true
