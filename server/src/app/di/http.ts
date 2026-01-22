@@ -15,7 +15,7 @@ declare module 'fastify' {
 
 export async function httpServer(this: DI): Promise<FastifyInstance> {
 	const server = Fastify({
-		logger: false,
+		logger: true,
 	})
 		.setValidatorCompiler(validatorCompiler)
 		.setSerializerCompiler(serializerCompiler)
