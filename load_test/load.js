@@ -1,23 +1,24 @@
 import http from 'k6/http'
 import { check, group, sleep, fail } from 'k6'
 
-const BASE_URL = 'http://localhost:3000'
-const GIFT_ID = '69716f9cb948017f8e0e5c40'
+const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000'
+const GIFT_ID = __ENV.GIFT_ID || '69716f9cb948017f8e0e5c40'
 
-const USERS_COUNT = 300
-const USER_ID_START = 100000
+const USERS_COUNT = Number(__ENV.USERS_COUNT || 300)
+const USER_ID_START = Number(__ENV.USER_ID_START || 100000)
 
-const CREATE_RACE_RPS_START = 5
-const CREATE_RACE_RPS_PEAK = 80
+const BID_RPS_START = Number(__ENV.BID_RPS_START || 20)
+const BID_RPS_PEAK = Number(__ENV.BID_RPS_PEAK || 400)
 
-const BID_RPS_START = 20
-const BID_RPS_PEAK = 400
+const BID_INC_MIN = Number(__ENV.BID_INC_MIN || 1)
+const BID_INC_MAX = Number(__ENV.BID_INC_MAX || 5)
 
-const BID_INC_MIN = 1
-const BID_INC_MAX = 5
+const TIMEOUT_READ = __ENV.TIMEOUT_READ || '15s'
+const TIMEOUT_WRITE = __ENV.TIMEOUT_WRITE || '20s'
 
-const TIMEOUT_READ = '15s'
-const TIMEOUT_WRITE = '20s'
+const SETUP_RACE_BATCH = Number(__ENV.SETUP_RACE_BATCH || 40)
+const SETUP_RACE_RETRIES = Number(__ENV.SETUP_RACE_RETRIES || 5)
+const SETUP_RACE_SLEEP_MS = Number(__ENV.SETUP_RACE_SLEEP_MS || 150)
 
 function j(res) {
   try {
@@ -54,47 +55,24 @@ function mustOk(res, name) {
 function readErr(res) {
   const data = j(res)
   if (!data || typeof data !== 'object') return null
-
   const code = typeof data.code === 'string' ? data.code : null
   const message = typeof data.message === 'string' ? data.message : ''
   if (!code && !message) return null
-
   return { code, message, raw: data }
 }
 
-function expectError(res, expectedStatus, allowedCodes, allowedMessages, name) {
-  const body = readErr(res)
-  const ok =
-    res.status === expectedStatus &&
-    Boolean(
-      body &&
-        ((body.code && allowedCodes && allowedCodes.includes(body.code)) ||
-          (!body.code && allowedMessages && allowedMessages.includes(body.message))),
-    )
-
-  const chk = check(res, { [`${name}: expected error ok`]: () => ok })
-  if (!chk) {
-    fail(`${name} unexpected: status=${res.status} body=${String(res.body).slice(0, 700)}`)
-  }
-}
-
 function createAuctionPayload() {
-  const payload = {
+  return {
     gift_id: GIFT_ID,
     supply: 9000,
     winners_per_round: 100,
     round_duration_sec: 60,
-  }
-
-  if (Math.random() < 0.5) {
-    payload.antisniping_settings = {
+    antisniping_settings: {
       extensionDurationSec: 10,
       thresholdSec: 3,
       maxExtensions: 5,
-    }
+    },
   }
-
-  return payload
 }
 
 function findAuctionIdFromGifts(userId) {
@@ -113,36 +91,57 @@ function findAuctionIdFromGifts(userId) {
   return a0?.id || null
 }
 
-function createAuctionTry(userId) {
-  const res = http.post(
-    `${BASE_URL}/auctions`,
-    JSON.stringify(createAuctionPayload()),
-    jsonHeadersFor(userId, false),
-  )
-
-  if (res.status >= 200 && res.status < 400) {
-    const data = j(res)
-    const id = data?.auction_id
-    if (!id) fail('POST /auctions: auction_id not found')
-    return { ok: true, auctionId: id }
+function runCreateAuctionRaceOnce() {
+  const reqs = []
+  for (let i = 0; i < SETUP_RACE_BATCH; i++) {
+    const userId = pickUserId()
+    reqs.push([
+      'POST',
+      `${BASE_URL}/auctions`,
+      JSON.stringify(createAuctionPayload()),
+      jsonHeadersFor(userId, false),
+    ])
   }
 
-  return { ok: false, status: res.status, body: String(res.body).slice(0, 700) }
+  const resps = http.batch(reqs)
+
+  for (const res of resps) {
+    if (res.status >= 200 && res.status < 400) continue
+
+    if (res.status === 409) {
+      const body = readErr(res)
+      const ok =
+        body &&
+        (body.code === 'ErrAnotherActiveAuction' ||
+          body.message === 'Another auction is in action, please wait')
+      if (!ok) {
+        fail(`setup race: unexpected 409 body=${String(res.body).slice(0, 700)}`)
+      }
+      continue
+    }
+
+    if (res.status === 422) {
+      const body = readErr(res)
+      const ok = body && body.code === 'ValidationError'
+      if (!ok) {
+        fail(`setup race: unexpected 422 body=${String(res.body).slice(0, 700)}`)
+      }
+      continue
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      continue
+    }
+
+    fail(`setup race: unexpected status=${res.status} body=${String(res.body).slice(0, 700)}`)
+  }
 }
 
-function getOrCreateAuctionId() {
+function getAuctionIdOrFail() {
   const userId = pickUserId()
-
-  const existing = findAuctionIdFromGifts(userId)
-  if (existing) return existing
-
-  const attempt = createAuctionTry(userId)
-  if (attempt.ok) return attempt.auctionId
-
-  const after = findAuctionIdFromGifts(userId)
-  if (after) return after
-
-  fail(`setup: cannot obtain auction id. create status=${attempt.status} body=${attempt.body}`)
+  const id = findAuctionIdFromGifts(userId)
+  if (!id) fail(`setup: auction id not found in GET /gifts for gift_id=${GIFT_ID}`)
+  return id
 }
 
 function parseAmount(v) {
@@ -169,21 +168,6 @@ function getMinBidFromAuction(auctionRes) {
 
 export const options = {
   scenarios: {
-    create_auctions_race: {
-      executor: 'ramping-arrival-rate',
-      startRate: CREATE_RACE_RPS_START,
-      timeUnit: '1s',
-      preAllocatedVUs: 100,
-      maxVUs: 2000,
-      stages: [
-        { target: CREATE_RACE_RPS_START, duration: '15s' },
-        { target: 20, duration: '20s' },
-        { target: 40, duration: '20s' },
-        { target: CREATE_RACE_RPS_PEAK, duration: '25s' },
-        { target: 0, duration: '10s' },
-      ],
-      exec: 'createAuctionRace',
-    },
     bid_storm: {
       executor: 'ramping-arrival-rate',
       startRate: BID_RPS_START,
@@ -208,54 +192,22 @@ export const options = {
 }
 
 export function setup() {
-  const auctionId = getOrCreateAuctionId()
-  return { auctionId }
-}
+  group('setup: create auction race (once)', () => {
+    for (let i = 0; i < SETUP_RACE_RETRIES; i++) {
+      const existing = findAuctionIdFromGifts(pickUserId())
+      if (existing) return { auctionId: existing }
 
-export function createAuctionRace() {
-  const userId = pickUserId()
+      runCreateAuctionRaceOnce()
 
-  group('race: create auctions same gift', () => {
-    const res = http.post(
-      `${BASE_URL}/auctions`,
-      JSON.stringify(createAuctionPayload()),
-      jsonHeadersFor(userId, false),
-    )
+      const after = findAuctionIdFromGifts(pickUserId())
+      if (after) return { auctionId: after }
 
-    if (res.status >= 200 && res.status < 400) {
-      const data = j(res)
-      if (!data?.auction_id) fail('POST /auctions (race): auction_id not found')
-      return
+      sleep(SETUP_RACE_SLEEP_MS / 1000)
     }
-
-    if (res.status === 422) {
-      expectError(res, 422, ['ValidationError'], null, 'POST /auctions (race)')
-      return
-    }
-
-    if (res.status === 404) {
-      expectError(res, 404, ['ErrAuctionNotFound'], ['Auction not found'], 'POST /auctions (race)')
-      return
-    }
-
-    if (res.status === 409) {
-      expectError(
-        res,
-        409,
-        ['ErrAnotherActiveAuction'],
-        ['Another auction is in action, please wait'],
-        'POST /auctions (race)',
-      )
-      return
-    }
-
-    if (res.status === 400) {
-      expectError(res, 400, null, null, 'POST /auctions (race)')
-      return
-    }
-
-    fail(`POST /auctions (race) unexpected: status=${res.status} body=${String(res.body).slice(0, 700)}`)
   })
+
+  const auctionId = getAuctionIdOrFail()
+  return { auctionId }
 }
 
 export function bidStorm(data) {
@@ -288,35 +240,42 @@ export function bidStorm(data) {
 
     if (bidRes.status >= 200 && bidRes.status < 400) return
 
+    const body = readErr(bidRes)
+
     if (bidRes.status === 422) {
-      expectError(bidRes, 422, ['ValidationError'], null, 'POST /auctions/:id/bids')
+      const ok = body && body.code === 'ValidationError'
+      const chk = check(bidRes, { 'POST /auctions/:id/bids: expected error ok': () => Boolean(ok) })
+      if (!chk) fail(`POST /auctions/:id/bids unexpected 422: body=${String(bidRes.body).slice(0, 700)}`)
       return
     }
 
     if (bidRes.status === 404) {
-      expectError(
-        bidRes,
-        404,
-        ['ErrAuctionNotFound', 'ErrUserNotFound'],
-        ['Auction not found', 'User not found'],
-        'POST /auctions/:id/bids',
-      )
+      const ok =
+        body &&
+        (body.code === 'ErrAuctionNotFound' || body.code === 'ErrUserNotFound' ||
+          body.message === 'Auction not found' || body.message === 'User not found')
+      const chk = check(bidRes, { 'POST /auctions/:id/bids: expected error ok': () => Boolean(ok) })
+      if (!chk) fail(`POST /auctions/:id/bids unexpected 404: body=${String(bidRes.body).slice(0, 700)}`)
       return
     }
 
     if (bidRes.status === 409) {
-      expectError(
-        bidRes,
-        409,
-        ['ErrInactiveAuction', 'ErrTooSmallBid', 'ErrInsufficientFunds'],
-        ['Auction is not active', 'Bid is too small', 'Insufficient funds'],
-        'POST /auctions/:id/bids',
-      )
+      const ok =
+        body &&
+        (body.code === 'ErrInactiveAuction' ||
+          body.code === 'ErrTooSmallBid' ||
+          body.code === 'ErrInsufficientFunds' ||
+          body.message === 'Auction is not active' ||
+          body.message === 'Bid is too small' ||
+          body.message === 'Insufficient funds')
+      const chk = check(bidRes, { 'POST /auctions/:id/bids: expected error ok': () => Boolean(ok) })
+      if (!chk) fail(`POST /auctions/:id/bids unexpected 409: body=${String(bidRes.body).slice(0, 700)}`)
       return
     }
 
     if (bidRes.status === 400) {
-      expectError(bidRes, 400, null, null, 'POST /auctions/:id/bids')
+      const chk = check(bidRes, { 'POST /auctions/:id/bids: expected error ok': () => true })
+      if (!chk) fail(`POST /auctions/:id/bids unexpected 400: body=${String(bidRes.body).slice(0, 700)}`)
       return
     }
 

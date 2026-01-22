@@ -1,5 +1,4 @@
 import type { BidRepo } from '.'
-import { BidStatus } from '../../../generated/prisma/enums'
 
 export async function refundBidsToUsersBalance(
 	this: BidRepo,
@@ -8,36 +7,27 @@ export async function refundBidsToUsersBalance(
 		excludeUserIds: number[]
 	},
 ): Promise<void> {
-	const grouped = await this.db.bid.aggregateRaw({
-		pipeline: [
-			{
-				$match: {
-					auctionId: { $oid: input.auctionId },
-					status: BidStatus.PENDING,
-					bidderId: { $nin: input.excludeUserIds },
-				},
+	const bids = await this.db.bid.findMany({
+		where: {
+			bidderId: {
+				notIn: input.excludeUserIds
 			},
-			{
-				$group: {
-					_id: '$bidderId',
-					total: { $sum: '$amount' },
-				},
-			},
-		],
+			status: 'PENDING'
+		}
 	})
 
-	const rows = grouped as unknown as Array<{ _id: number; total: number }>
-
-	for (const row of rows) {
-		await this.db.user.updateMany({
-			where: {
-				userId: row._id,
-			},
-			data: {
-				balance: {
-					increment: row.total,
+	await Promise.all(
+		bids.map((bid) => {
+			return this.db.user.updateMany({
+				where: {
+					userId: bid.bidderId,
 				},
-			},
-		})
-	}
+				data: {
+					balance: {
+						increment: bid.amount,
+					},
+				},
+			})
+		}),
+	)
 }

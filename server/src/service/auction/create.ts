@@ -1,3 +1,4 @@
+import { sleep } from 'bun'
 import { z } from 'zod'
 import type { AuctionService } from '.'
 import { runTx } from '../../../utils/mongo/tx'
@@ -32,6 +33,7 @@ export async function create(
 	const auctionId = await runTx(this.db, async (tx) => {
 		const hasAuctionInProgress =
 			await this.auctionProvider.withTx(tx).hasAuctionInProgress(input.gift_id)
+
 		if (hasAuctionInProgress) {
 			throw new ErrAnotherActiveAuction()
 		}
@@ -43,7 +45,7 @@ export async function create(
 			antiSniping_settings: input.antisniping_settings,
 			roundDurationSec: input.round_duration_sec,
 		})
-		
+
 		return auctionId
 	})
 

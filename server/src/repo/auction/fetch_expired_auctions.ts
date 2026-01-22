@@ -8,6 +8,10 @@ export async function fetchExpiredAuctions(
 		where: {
 			roundExpiresAt: {
 				lte: new Date(),
+				not: null
+			},
+			status: {
+				not: 'FINISHED'
 			},
 		},
 	})

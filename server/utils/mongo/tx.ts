@@ -1,12 +1,14 @@
-import type { PrismaClient } from '../../generated/prisma/client'
+import { Prisma, type PrismaClient } from '../../generated/prisma/client'
+import { BaseError } from '../../src/errors'
 import type { QueryExecutor } from '../../types/prisma'
 
-type RunTxWithRetryOpts = {
+export type RunTxWithRetryOpts = {
 	maxAttempts?: number
 	baseDelayMs?: number
 	maxDelayMs?: number
-	/* 
-		Если две параллельные транзакции словили дедлок, то запускаем их через разное время, чтобы они опять не словили дедлок, очевидно
+	/*
+		Если две параллельные транзакции словили дедлок, то запускаем их через разное время,
+		чтобы они опять не словили дедлок, очевидно
 	*/
 	jitterRatio?: number
 	deadlineMs?: number
@@ -44,30 +46,30 @@ function backoffDelayMs(
 }
 
 function defaultIsRetryable(err: unknown): boolean {
+	if (err instanceof Prisma.PrismaClientKnownRequestError) {
+		if (err.code === 'P2034') return true
+		if (err.code === 'P2028') return true
+
+		return false
+	}
+
+	if (err instanceof Prisma.PrismaClientUnknownRequestError) return true
+	if (err instanceof Prisma.PrismaClientInitializationError) return true
+	if (err instanceof Prisma.PrismaClientRustPanicError) return false
+	if (err instanceof Prisma.PrismaClientValidationError) return false
+
 	const e: any = err
 	const code = String(e?.code ?? '')
-	const name = String(e?.name ?? '')
 	const message = String(e?.message ?? '')
 	const meta = e?.meta
-
-	if (code === 'P2034') return true
-	if (code === 'P2028') return true
 
 	if (code === '40001') return true
 	if (code === '40P01') return true
 	if (code === '55P03') return true
 
 	if (message.includes('Transaction already closed')) return true
-	if (
-		message.toLowerCase().includes('transaction') &&
-		message.toLowerCase().includes('timeout')
-	)
-		return true
-	if (
-		message.toLowerCase().includes('deadline') &&
-		message.toLowerCase().includes('exceeded')
-	)
-		return true
+	if (message.toLowerCase().includes('transaction') && message.toLowerCase().includes('timeout')) return true
+	if (message.toLowerCase().includes('deadline') && message.toLowerCase().includes('exceeded')) return true
 
 	if (message.includes('TransientTransactionError')) return true
 	if (message.includes('UnknownTransactionCommitResult')) return true
@@ -77,14 +79,7 @@ function defaultIsRetryable(err: unknown): boolean {
 	if (code === 'ETIMEDOUT') return true
 	if (code === 'EPIPE') return true
 	if (code === 'ECONNREFUSED') return true
-	if (
-		message.toLowerCase().includes('socket') &&
-		message.toLowerCase().includes('hang up')
-	)
-		return true
-
-	if (name.includes('PrismaClientRustPanicError')) return false
-	if (name.includes('PrismaClientValidationError')) return false
+	if (message.toLowerCase().includes('socket') && message.toLowerCase().includes('hang up')) return true
 
 	if (meta && typeof meta === 'object') {
 		const m = String((meta as any)?.cause ?? '')
@@ -103,18 +98,16 @@ export async function runTx<TOut>(
 	const baseDelayMs = opts.baseDelayMs ?? 50
 	const maxDelayMs = opts.maxDelayMs ?? 1_500
 	const jitterRatio = opts.jitterRatio ?? 0.3
-	const deadlineMs = opts.deadlineMs ?? 8 * 1_000
+	const deadlineMs = opts.deadlineMs ?? 8_000
 
 	const startedAt = nowMs()
-	let lastErr: unknown
+	let lastErr: unknown = undefined
 
 	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
 		if (deadlineMs > 0 && nowMs() - startedAt > deadlineMs) break
 
 		try {
-			const txOptions = opts.txOptions ?? {}
-
-			const out = await prisma.$transaction(fn, txOptions)
+			const out = await prisma.$transaction(async (tx) => await fn(tx), opts.txOptions)
 
 			return out
 		} catch (err) {
@@ -126,14 +119,13 @@ export async function runTx<TOut>(
 					: defaultIsRetryable(err)
 
 			const isLastAttempt = attempt >= maxAttempts
-			if (!retryable || isLastAttempt) throw err
+			if (!retryable || isLastAttempt) {
+				console.info('ne retraim')
 
-			const delayMs = backoffDelayMs(
-				attempt,
-				baseDelayMs,
-				maxDelayMs,
-				jitterRatio,
-			)
+				throw err
+			}
+
+			const delayMs = backoffDelayMs(attempt, baseDelayMs, maxDelayMs, jitterRatio)
 			if (opts.onRetry) opts.onRetry({ attempt, delayMs, err })
 
 			if (deadlineMs > 0) {
@@ -145,5 +137,6 @@ export async function runTx<TOut>(
 		}
 	}
 
-	throw lastErr
+	if (lastErr) throw lastErr
+	throw new Error('runTx: deadline exceeded')
 }
