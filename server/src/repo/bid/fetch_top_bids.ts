@@ -19,7 +19,7 @@ export async function fetchTopBids(
 				createdAt: 'asc',
 			},
 		],
-		take: limit,
+		take: limit > 100 ? 100 : limit,
 	})
 
 	return bids

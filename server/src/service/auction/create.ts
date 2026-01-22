@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import type { AuctionService } from '.'
+import { runTx } from '../../../utils/mongo/tx'
+import { ErrAnotherActiveAuction } from '../../errors'
 
 export const CreateAuctionInSchema = z.object({
 	gift_id: z.string(),
@@ -27,21 +29,22 @@ export async function create(
 ): Promise<CreateAuctionOut> {
 	await CreateAuctionInSchema.parseAsync(input)
 
-	const hasAuctionInProgress = await this.auctionProvider.hasAuctionInProgress(
-		input.gift_id,
-	)
-	if (hasAuctionInProgress) {
-		throw new Error(
-			'There is another auction in progress, wait until its ended',
-		)
-	}
+	const auctionId = await runTx(this.db, async (tx) => {
+		const hasAuctionInProgress =
+			await this.auctionProvider.withTx(tx).hasAuctionInProgress(input.gift_id)
+		if (hasAuctionInProgress) {
+			throw new ErrAnotherActiveAuction()
+		}
 
-	const auctionId = await this.auctionProvider.create({
-		giftId: input.gift_id,
-		supply: input.supply,
-		winnersPerRound: input.winners_per_round,
-		antiSniping_settings: input.antisniping_settings,
-		roundDurationSec: input.round_duration_sec,
+		const auctionId = await this.auctionProvider.withTx(tx).create({
+			giftId: input.gift_id,
+			supply: input.supply,
+			winnersPerRound: input.winners_per_round,
+			antiSniping_settings: input.antisniping_settings,
+			roundDurationSec: input.round_duration_sec,
+		})
+		
+		return auctionId
 	})
 
 	return {

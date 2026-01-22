@@ -34,6 +34,9 @@ export class App {
 	}
 
 	private async setupMiddlewares(): Promise<void> {
+		const errorMiddleware = await this.di.errorMiddleware
+		errorMiddleware.setup()
+
 		const authMiddleware = await this.di.authMiddleware
 		authMiddleware.setup()
 	}

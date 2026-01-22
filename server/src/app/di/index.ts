@@ -4,6 +4,7 @@ import type { AuctionHandler } from '../../controller/handler/auction'
 import type { GiftHandler } from '../../controller/handler/gift'
 import type { UserHandler } from '../../controller/handler/user'
 import type { AuthMiddleware } from '../../controller/middleware/auth'
+import type { ErrorMiddleware } from '../../controller/middleware/error'
 import type { AuctionRepo } from '../../repo/auction'
 import type { BidRepo } from '../../repo/bid'
 import type { GiftRepo } from '../../repo/gift'
@@ -21,7 +22,7 @@ import {
 import { bidRepo } from './bid'
 import { database } from './db'
 import { giftHandler, giftRepo, giftService } from './gift'
-import { httpServer } from './http'
+import { errorMiddleware, httpServer } from './http'
 import { authMiddleware, userHandler, userRepo, userService } from './user'
 
 type Factory<T> = (this: DI) => T | Promise<T>
@@ -42,6 +43,8 @@ export class DI {
 
 	@Inject(httpServer)
 	httpServer!: Promise<FastifyInstance>
+	@Inject(errorMiddleware)
+	errorMiddleware!: Promise<ErrorMiddleware>
 
 	@Inject(giftHandler)
 	giftHandler!: Promise<GiftHandler>

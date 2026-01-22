@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { AuctionService } from '.'
+import { ErrAuctionNotFound, ErrInactiveAuction, ErrInsufficientFunds, ErrTooSmallBid, ErrUserNotFound } from '../../errors'
 
 export const CreateBidInSchema = z.object({
 	auction_id: z.string().min(1),
@@ -40,13 +41,12 @@ export async function createBid(
 		const auction = await this.auctionProvider
 			.withTx(tx)
 			.fetchById(input.auction_id)
-
 		if (!auction) {
-			throw new Error('Auction not found')
+			throw new ErrAuctionNotFound()
 		}
 
 		if (auction.status === 'FINISHED') {
-			throw new Error('Auction is not in progress')
+			throw new ErrInactiveAuction()
 		}
 
 		const userBid = await this.bidProvider
@@ -65,17 +65,16 @@ export async function createBid(
 			Number(userBid?.amount ?? 0) + Number(input.amount)
 
 		if (lowestBid && resultingBidAmount < Number(lowestBid.amount)) {
-			throw new Error('Bid amount is too low')
+			throw new ErrTooSmallBid()
 		}
 
 		const user = await this.userProvider.withTx(tx).fetchById(input.bidder_id)
-
 		if (!user) {
-			throw new Error('User not found')
+			throw new ErrUserNotFound()
 		}
 
 		if (user.balance < Number(input.amount)) {
-			throw new Error('Insufficient balance')
+			throw new ErrInsufficientFunds()
 		}
 
 		const bidId = await this.bidProvider.withTx(tx).createBid({

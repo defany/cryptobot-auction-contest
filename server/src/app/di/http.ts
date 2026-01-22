@@ -5,6 +5,7 @@ import {
 	validatorCompiler,
 } from 'fastify-type-provider-zod'
 import { DI } from '.'
+import { ErrorMiddleware } from '../../controller/middleware/error'
 
 declare module 'fastify' {
 	interface FastifyRequest {
@@ -12,7 +13,7 @@ declare module 'fastify' {
 	}
 }
 
-export function httpServer(this: DI): FastifyInstance {
+export async function httpServer(this: DI): Promise<FastifyInstance> {
 	const server = Fastify({
 		logger: true,
 	})
@@ -25,4 +26,8 @@ export function httpServer(this: DI): FastifyInstance {
 	})
 
 	return server
+}
+
+export async function errorMiddleware(this: DI): Promise<ErrorMiddleware> {
+	return new ErrorMiddleware(await this.httpServer)
 }
