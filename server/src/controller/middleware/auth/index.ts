@@ -19,7 +19,7 @@ export class AuthMiddleware {
 			Мы ожидаем заголовок авторизации в формате: Bearer <айди пользователя>
 
 			Если юзера нет в базе данных, мы его зарегистрируем
-			Если юзер прокинет заголовок x-balance-restore - мы восстановим ему баланс
+			Если юзер прокинет заголовок x-balance-restore - мы увеличим/уменьшим ему баланс на сумму, которую он прокинул
 		*/
 
 		this.server.addHook(
@@ -30,7 +30,15 @@ export class AuthMiddleware {
 					return reply.code(401).send({ error: 'unauthorized' })
 				}
 
-				const restoreBalance = req.headers['x-balance-restore'] === 'true'
+				const restoreHeader = req.headers['x-balance-restore']
+				let restoreBalanceAmount: number | null = null
+
+				if (typeof restoreHeader === 'string') {
+					const n = Number(restoreHeader)
+					if (Number.isFinite(n)) {
+						restoreBalanceAmount = n
+					}
+				}
 
 				const [type, value] = auth.split(' ')
 				if (type !== 'Bearer' || !value) {
@@ -46,7 +54,7 @@ export class AuthMiddleware {
 
 				await this.service.create({
 					userId: userId,
-					restoreBalance: restoreBalance,
+					restoreBalanceAmount: restoreBalanceAmount,
 				})
 			},
 		)

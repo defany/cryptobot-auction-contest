@@ -9,12 +9,13 @@ export async function processExpiredRound(
 	auction: Auction,
 ): Promise<void> {
 	await runTx(this.db, async tx => {
+		const winnersCountThisRound = Math.min(auction.supply, auction.winnersPerRound)
+
 		const winnerBids = await this.bidRepo
 			.withTx(tx)
-			.fetchTopBids(auction.id, auction.winnersPerRound)
+			.fetchTopBids(auction.id, winnersCountThisRound)
 
-		const winnersCountThisRound = winnerBids.length
-		const supplyLeft = Math.max(0, auction.supply - winnersCountThisRound)
+		const supplyLeft = auction.supply - winnersCountThisRound
 
 		if (supplyLeft === 0) {
 			await this.finishAuction(auction, winnerBids, tx)

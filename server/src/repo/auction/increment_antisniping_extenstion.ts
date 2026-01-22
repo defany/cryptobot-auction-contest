@@ -25,23 +25,4 @@ export async function incrementAntisnipingExtensionIfNeeded(
 	if (res.count === 1) {
 		return
 	}
-
-	const antiSnipingSettings = await this.db.auctionAntiSniping.findFirst({
-		where: {
-			auctionId: input.auctionId,
-			enabled: true,
-		},
-		select: {
-			currentExtension: true,
-		},
-	})
-	if (!antiSnipingSettings) {
-		return
-	}
-
-	if (antiSnipingSettings.currentExtension >= input.maxExtensions) {
-		throw new Error('no more extensions this round')
-	}
-
-	return
 }

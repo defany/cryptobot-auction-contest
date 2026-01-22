@@ -77,7 +77,7 @@ model AuctionAntiSniping {
   extensionDurationSec Int     @default(10)
   thresholdSec         Int     @default(3)
   maxExtensions        Int     @default(3)
-  currentExtension     Int     @default(1)
+  currentExtension     Int     @default(0)
 
   auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
 }

@@ -27,6 +27,7 @@ export async function finishAuction(
 		},
 		data: {
 			status: 'FINISHED',
+			supply: 0
 		},
 	})
 }
@@ -63,7 +64,7 @@ export async function advanceRound(
 			auctionId: input.auctionId,
 		},
 		data: {
-			currentExtension: 1,
+			currentExtension: 0,
 		},
 	})
 }

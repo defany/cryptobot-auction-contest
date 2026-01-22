@@ -1,0 +1,44 @@
+# docker-compose.dev.full.yml
+version: "3.9"
+
+services:
+  mongodb:
+    extends:
+      file: ./server/docker-compose.yaml
+      service: mongodb
+    networks:
+      - devnet
+
+  mongo-init:
+    extends:
+      file: ./server/docker-compose.yaml
+      service: mongo-init
+    networks:
+      - devnet
+
+  backend:
+    extends:
+      file: ./server/docker-compose.yaml
+      service: backend
+    networks:
+      - devnet
+
+  frontend:
+    extends:
+      file: ./client/docker-compose.dev.yaml
+      service: frontend
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    networks:
+      - devnet
+    depends_on:
+      - backend
+
+networks:
+  devnet:
+    name: devnet
+    driver: bridge
+
+volumes:
+  prod_mongo_data:
+  prod_mongo_key:

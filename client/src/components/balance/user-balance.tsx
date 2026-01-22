@@ -39,12 +39,19 @@ export function UserBalance({ className, title = 'Balance', pollMs = 4000 }: Pro
 		return `⭐ ${formatCompactNumber(amount)}`
 	}, [amount])
 
-	async function load(): Promise<void> {
+	async function load(restoreDelta?: number): Promise<void> {
 		if (inFlightRef.current) return
 		inFlightRef.current = true
 
 		try {
-			const res = await callApi<{ response: BalanceResponse }>('GET', '/balances/my')
+			const headers =
+				typeof restoreDelta === 'number'
+					? { 'x-balance-restore': String(restoreDelta) }
+					: undefined
+
+			const res = await callApi<{ response: BalanceResponse }>('GET', '/balances/my', {
+				headers: headers
+			})
 
 			const raw = res.amount
 			const n = toNumberAmount(raw)
@@ -78,11 +85,41 @@ export function UserBalance({ className, title = 'Balance', pollMs = 4000 }: Pro
 		}
 	}, [pollMs])
 
+	const dec = 500
+	const disableDecrease =
+		inFlightRef.current ||
+		amount == null ||
+		amount - dec < 0
+
 	return (
 		<div className={className}>
 			<div className="text-xs text-muted-foreground">{title}</div>
-			<div className="text-lg font-semibold tabular-nums">
-				{loading && amount == null ? 'Loading…' : amountText}
+
+			<div className="flex items-center gap-2">
+				<div className="text-lg font-semibold tabular-nums">
+					{loading && amount == null ? 'Loading…' : amountText}
+				</div>
+
+				<div className="flex items-center gap-1">
+					<button
+						type="button"
+						className="h-8 px-2 rounded-md border text-sm leading-none disabled:opacity-50"
+						onClick={() => load(-dec).catch(() => {})}
+						disabled={disableDecrease}
+						title="-500"
+					>
+						−500
+					</button>
+					<button
+						type="button"
+						className="h-8 px-2 rounded-md border text-sm leading-none disabled:opacity-50"
+						onClick={() => load(500).catch(() => {})}
+						disabled={inFlightRef.current}
+						title="+500"
+					>
+						+500
+					</button>
+				</div>
 			</div>
 		</div>
 	)

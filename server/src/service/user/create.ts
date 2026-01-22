@@ -2,15 +2,15 @@ import type { UserService } from '.'
 
 export type CreateIn = {
 	userId: number
-	restoreBalance: boolean
+	restoreBalanceAmount: number | null
 }
 
 export async function create(this: UserService, input: CreateIn): Promise<void> {
 	await this.repo.create(input.userId)
 
-	if (!input.restoreBalance) {
+	if (!input.restoreBalanceAmount) {
 		return 
 	}
 
-	await this.repo.restoreBalance(input.userId)
+	await this.repo.increaseBalance(input.userId, input.restoreBalanceAmount)
 }

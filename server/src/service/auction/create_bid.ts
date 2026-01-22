@@ -109,6 +109,12 @@ export async function createBid(
 			}
 		}
 
+		if (antiSnipingSettings.currentExtension >= antiSnipingSettings.maxExtensions) {
+			return {
+				bidId: bidId
+			}
+		}
+
 		const wasExtended = await this.auctionProvider
 			.withTx(tx)
 			.extendRoundIfNeeded({
