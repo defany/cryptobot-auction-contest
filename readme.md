@@ -21,4 +21,19 @@ https://defany.github.io/cryptobot-auction-contest/
 ### Запуск проекта:
 В корне проекта: docker compose up --build -d предварительно перед этим прописав .env в server/client в соответствии с .env.example
 
+После этого зайти в консоль докер контейнера монги, зайти в mongosh:
+```cmd
+export MONGO_USER=defany
+export MONGO_PASSWORD=2335
+
+mongosh -u "$MONGO_USER" -p "$MONGO_PASSWORD"   --authenticationDatabase admin
+
+use app;
+
+db.Gift.insertOne({
+    'name': 'Shneine Pepe Watafa',
+    'lastIssuedNumber': 0,
+});
+```
+
 Для запуска нагрузочных тестов достаточно поменять константы с айди гифта из бд и ссылкой до бекенда и прописать `k6 run load.js`
