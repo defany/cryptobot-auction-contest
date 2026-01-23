@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { AuctionService } from '.'
 import { ErrAuctionNotFound, ErrInactiveAuction, ErrInsufficientFunds, ErrTooSmallBid, ErrUserNotFound } from '../../errors'
+import { runTx } from '../../../utils/mongo/tx'
 
 export const CreateBidInSchema = z.object({
 	auction_id: z.string().min(1),
@@ -37,7 +38,7 @@ export async function createBid(
 ): Promise<CreateBidOut> {
 	await CreateBidInSchema.parseAsync(input)
 
-	const out = await this.db.$transaction(async tx => {
+	const out = await runTx(this.db, async tx => {
 		const auction = await this.auctionProvider
 			.withTx(tx)
 			.fetchById(input.auction_id)
